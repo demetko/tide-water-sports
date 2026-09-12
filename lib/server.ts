@@ -39,7 +39,7 @@ export const bookingInput=z.object({
   phone:z.string().regex(/^\+?[0-9 ()-]{7,30}$/),date:z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
   hour:z.number().int().min(9).max(17),duration:z.number().int().min(1).max(4),quantity:z.number().int().min(1).max(8),
   departure:z.enum(['Sunny Beach','Nessebar','Burgas Marina']),amount:z.number().positive(),
-  key:z.string().uuid(),terms:z.literal(true),payment_token:z.literal('pm_mock_visa')
+  currency:z.literal('EUR'),key:z.string().uuid(),terms:z.literal(true),payment_token:z.literal('pm_mock_visa')
 }).strict().refine(b=>b.hour+b.duration<=18);
 export async function mockCheckout(raw:unknown){
   const parsed=bookingInput.safeParse(raw);

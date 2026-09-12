@@ -14,7 +14,7 @@ export async function POST(req:Request){
   const supplied=Buffer.from(parts.v1||'','hex');
   if(expected.length!==supplied.length||!timingSafeEqual(expected,supplied))throw new Error('FORBIDDEN');
   const event=JSON.parse(raw);
-  if(event.type!=='payment_intent.succeeded'||event.livemode!==false||event.data?.object?.currency!=='bgn')throw new Error('INVALID_INPUT');
+  if(event.type!=='payment_intent.succeeded'||event.livemode!==false||event.data?.object?.currency!=='eur')throw new Error('INVALID_INPUT');
   const booking=event.data.object.metadata?.booking;
   if(!booking||event.data.object.amount_received!==Math.round(booking.amount*100))throw new Error('PRICE_CHANGED');
   return Response.json(await mockCheckout(booking));

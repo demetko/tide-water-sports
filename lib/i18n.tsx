@@ -4,6 +4,15 @@ export const languages={en:'English',bg:'Български',ro:'Română',de:'D
 export type Lang=keyof typeof languages;
 const codes=Object.keys(languages) as Lang[];
 export const messages={
+ "mapTitle": ["Find your departure kiosk","Намерете мястото за тръгване","Găsește chioșcul de plecare","Finde deine Abfahrtsstation","Znajdź punkt wypłynięcia","Знайдіть пункт відправлення"],
+ "mapDemo": ["Illustrative kiosk locations","Примерни местоположения на пунктове","Locații demonstrative ale chioșcurilor","Beispielhafte Stationsstandorte","Przykładowe lokalizacje punktów","Приклади розташування пунктів"],
+ "mapLoading": ["Loading map…","Зареждане на картата…","Se încarcă harta…","Karte wird geladen…","Ładowanie mapy…","Завантаження мапи…"],
+ "mapError": ["The map is unavailable. Please try again.","Картата не е достъпна. Опитайте отново.","Harta nu este disponibilă. Încearcă din nou.","Die Karte ist nicht verfügbar. Bitte erneut versuchen.","Mapa jest niedostępna. Spróbuj ponownie.","Мапа недоступна. Спробуйте ще раз."],
+ "mapTilesError": ["Map tiles could not load. Kiosk directions are still available.","Картата не се зареди. Упътванията до пунктовете са достъпни.","Harta nu s-a încărcat. Indicațiile către chioșcuri sunt disponibile.","Kartenkacheln konnten nicht laden. Wegbeschreibungen sind weiterhin verfügbar.","Mapa nie została załadowana. Wskazówki dojazdu są nadal dostępne.","Мапа не завантажилася. Маршрути до пунктів доступні."],
+ "googleDirections": ["Google Maps Directions","Упътвания с Google Maps","Indicații Google Maps","Google Maps Wegbeschreibung","Trasa w Google Maps","Маршрут у Google Maps"],
+ "appleDirections": ["Apple Maps Directions","Упътвания с Apple Maps","Indicații Apple Maps","Apple Maps Wegbeschreibung","Trasa w Apple Maps","Маршрут у Apple Maps"],
+ "zoomIn": ["Zoom in","Приближи","Mărește","Vergrößern","Powiększ","Наблизити"],
+ "zoomOut": ["Zoom out","Отдалечи","Micșorează","Verkleinern","Pomniejsz","Віддалити"],
  "book": [
   "Book an experience",
   "Резервирайте преживяване",
@@ -67,14 +76,6 @@ export const messages={
   "Dein Tag auf dem Wasser",
   "Twój dzień na wodzie",
   "Ваш день на воді"
- ],
- "local": [
-  "Local operators. Unforgettable experiences.",
-  "Местни оператори. Незабравими преживявания.",
-  "Operatori locali. Experiențe de neuitat.",
-  "Lokale Anbieter. Unvergessliche Erlebnisse.",
-  "Lokalni operatorzy. Niezapomniane wrażenia.",
-  "Місцеві оператори. Незабутні враження."
  ],
  "choose": [
   "Choose your kind of adventure",
@@ -557,12 +558,12 @@ export const messages={
   "Перевірте дані та використайте тестову картку 4242 4242 4242 4242."
  ],
  "localTime": [
-  "All times: Bulgaria · BGN pricing",
-  "Местно време: България · Цени в BGN",
-  "Ora Bulgariei · Prețuri în BGN",
-  "Bulgarische Ortszeit · Preise in BGN",
-  "Czas bułgarski · Ceny w BGN",
-  "Час Болгарії · Ціни в BGN"
+  "All times: Bulgaria · Prices in €",
+  "Местно време: България · Цени в €",
+  "Ora Bulgariei · Prețuri în €",
+  "Bulgarische Ortszeit · Preise in €",
+  "Czas bułgarski · Ceny w €",
+  "Час Болгарії · Ціни в €"
  ],
  "staffTitle": [
   "A clear view of your day.",
@@ -839,4 +840,3 @@ export function I18n({children}:{children:React.ReactNode}){
  return <Context.Provider value={{lang,setLang,t:key=>messages[key][codes.indexOf(lang)]}}>{children}</Context.Provider>;
 }
 export const useI18n=()=>useContext(Context);
-

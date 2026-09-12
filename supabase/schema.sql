@@ -3,7 +3,7 @@
 begin;
 create table public.equipment (
  id serial primary key, type varchar(100) not null,
- hourly_rate_bgn decimal(10,2) not null check(hourly_rate_bgn>0),
+ hourly_rate_eur decimal(10,2) not null check(hourly_rate_eur>0),
  max_quantity int not null check(max_quantity>0)
 );
 create table public.bookings (
@@ -11,7 +11,7 @@ create table public.bookings (
  customer_name varchar(255) not null, customer_phone varchar(50) not null,
  booking_date date not null, start_time time not null,
  duration_hours int not null check(duration_hours between 1 and 4),
- total_price_bgn decimal(10,2) not null check(total_price_bgn>0),
+ total_price_eur decimal(10,2) not null check(total_price_eur>0),
  payment_status varchar(50) not null default 'Pending' check(payment_status in ('Pending','Paid','Refunded')),
  fulfillment_status varchar(50) not null default 'Reserved' check(fulfillment_status in ('Reserved','Active','Completed','No-Show','Cancelled')),
  quantity int not null default 1 check(quantity>0),
@@ -37,10 +37,10 @@ create policy staff_bookings_read on public.bookings for select to authenticated
 revoke all on public.equipment,public.bookings,public.staff from anon,authenticated;
 grant select on public.equipment to anon,authenticated;
 grant select on public.bookings,public.staff to authenticated;
-insert into public.equipment(type,hourly_rate_bgn,max_quantity) values
- ('Jet Ski Kawasaki STX-160',120,8),
- ('Parasailing Tandem Flight',90,3),
- ('Sea Ray 230 Yacht Charter',350,2);
+insert into public.equipment(type,hourly_rate_eur,max_quantity) values
+ ('Jet Ski Kawasaki STX-160',60,8),
+ ('Parasailing Tandem Flight',45,3),
+ ('Sea Ray 230 Yacht Charter',175,2);
 
 create function public.tide_availability(p_date date,p_hour int,p_duration int)
 returns table(equipment_id int,available int)
@@ -77,26 +77,26 @@ begin
   or p_departure is null or p_departure not in ('Sunny Beach','Nessebar','Burgas Marina')
   or p_name is null or p_phone is null or p_key is null or p_amount is null
  then raise exception 'INVALID_INPUT'; end if;
- digest:=md5(jsonb_build_array(p_equipment,trim(p_name),p_phone,p_date,p_hour,p_duration,p_quantity,p_departure,p_amount)::text);
+ digest:=md5(jsonb_build_array(p_equipment,trim(p_name),p_phone,p_date,p_hour,p_duration,p_quantity,p_departure,trim_scale(p_amount),'EUR')::text);
  -- Serialize retries before reading the idempotency record.
  perform pg_advisory_xact_lock(hashtextextended(p_key::text,0));
  select * into b from public.bookings where idempotency_key=p_key;
  if found then
   if b.request_hash<>digest then raise exception 'IDEMPOTENCY_CONFLICT'; end if;
-  return jsonb_build_object('confirmation',b.confirmation,'total',b.total_price_bgn,'status',b.payment_status);
+  return jsonb_build_object('confirmation',b.confirmation,'total',b.total_price_eur,'status',b.payment_status);
  end if;
  if (p_date+make_time(p_hour,0,0)) <= (now() at time zone 'Europe/Sofia') then raise exception 'PAST_SLOT'; end if;
  select * into e from public.equipment where id=p_equipment for update;
  if not found then raise exception 'INVALID_EQUIPMENT'; end if;
- if p_amount<>e.hourly_rate_bgn*p_quantity*p_duration then raise exception 'PRICE_CHANGED'; end if;
+ if p_amount<>e.hourly_rate_eur*p_quantity*p_duration then raise exception 'PRICE_CHANGED'; end if;
  select available into free from public.tide_availability(p_date,p_hour,p_duration) where equipment_id=p_equipment;
  if p_quantity>free then raise exception 'SOLD_OUT'; end if;
  insert into public.bookings(equipment_id,customer_name,customer_phone,booking_date,start_time,duration_hours,
- total_price_bgn,quantity,departure,idempotency_key,request_hash)
+ total_price_eur,quantity,departure,idempotency_key,request_hash)
  values(p_equipment,trim(p_name),p_phone,p_date,make_time(p_hour,0,0),p_duration,p_amount,p_quantity,p_departure,p_key,digest)
  returning * into b;
  update public.bookings set payment_status='Paid' where id=b.id;
- return jsonb_build_object('confirmation',b.confirmation,'total',b.total_price_bgn,'status','Paid');
+ return jsonb_build_object('confirmation',b.confirmation,'total',b.total_price_eur,'status','Paid');
 end; $$;
 revoke all on function public.tide_mock_checkout(int,text,text,date,int,int,int,text,numeric,uuid,boolean) from public;
 grant execute on function public.tide_mock_checkout(int,text,text,date,int,int,int,text,numeric,uuid,boolean) to anon,authenticated;

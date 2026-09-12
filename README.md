@@ -2,7 +2,7 @@
 
 Tide is a mobile-first water sports rental MVP for visitors and rental operators on Bulgaria's Black Sea coast. Guests can browse equipment, check availability, choose a departure desk, and make a reservation through a simulated payment flow. Staff use a protected dashboard to view bookings and manage equipment departures and returns.
 
-**Payments are simulated.** The portal does not charge cards or connect to a production payment processor. Prices are configured in BGN according to the MVP specification.
+**Payments are simulated.** The portal does not charge cards or connect to a production payment processor. Prices are configured in EUR according to the MVP specification.
 
 ## Target regions
 
@@ -14,9 +14,14 @@ Tide is a mobile-first water sports rental MVP for visitors and rental operators
 
 The three desks share the same equipment capacity pool. Selecting a different departure location does not create additional inventory; the database tracks capacity by equipment and time interval.
 
+## Updating an existing installation
+
+For an existing Tide database, run [the euro pricing migration](supabase/migrations/20260912_euro_pricing.sql) in the Supabase SQL Editor before deploying this revision. It renames the monetary columns to `hourly_rate_eur` and `total_price_eur`, halves the previous simulated prices and booking totals once, and refreshes checkout retry fingerprints. Reservations and capacity are preserved. Rerunning does not halve the amounts again. Fresh databases should use `supabase/schema.sql` instead.
+
 ## Features
 
-- Equipment catalog with hourly rates, quantities, and availability.
+- Equipment catalog with hourly rates of €60 (jet ski), €45 (parasailing), and €175 (yacht).
+- Interactive Leaflet/OpenStreetMap map below the catalog, with five illustrative kiosk pins and responsive directions popups. Changing the departure flies to the selected hub at zoom 14.
 - Whole-hour reservations between **09:00 and 18:00**, lasting **1–4 hours**.
 - Future bookings up to **365 days ahead**, with booking rules evaluated in **Europe/Sofia**.
 - Guest checkout with customer details, departure location, terms acceptance, and a confirmation UUID.
@@ -104,7 +109,7 @@ The script creates the tables, constraints, seed equipment, row-level security p
 Verify the setup in the SQL Editor:
 
 ```sql
-select id, type, hourly_rate_bgn, max_quantity
+select id, type, hourly_rate_eur, max_quantity
 from public.equipment
 order by id;
 
@@ -203,24 +208,24 @@ Each row represents a rentable equipment category and its total shared fleet qua
 | --- | --- | --- | --- |
 | `id` | `serial` | Primary key; sequence-generated | Equipment identifier |
 | `type` | `varchar(100)` | Required | Display name of the equipment or experience |
-| `hourly_rate_bgn` | `decimal(10,2)` | Must be greater than 0 | Price per unit per hour in BGN |
+| `hourly_rate_eur` | `decimal(10,2)` | Must be greater than 0 | Price per unit per hour in EUR |
 | `max_quantity` | `integer` | Must be greater than 0 | Shared fleet capacity across all departure desks |
 
 **Initial seed data:**
 
-| Equipment | Hourly rate (BGN) | Capacity |
+| Equipment | Hourly rate (EUR) | Capacity |
 | --- | ---: | ---: |
-| Jet Ski Kawasaki STX-160 | 120.00 | 8 |
-| Parasailing Tandem Flight | 90.00 | 3 |
-| Sea Ray 230 Yacht Charter | 350.00 | 2 |
+| Jet Ski Kawasaki STX-160 | 60.00 | 8 |
+| Parasailing Tandem Flight | 45.00 | 3 |
+| Sea Ray 230 Yacht Charter | 175.00 | 2 |
 
 The authoritative price is:
 
 ```text
-total_price_bgn = hourly_rate_bgn × quantity × duration_hours
+total_price_eur = hourly_rate_eur × quantity × duration_hours
 ```
 
-For example, two jet skis for two hours cost **480.00 BGN**. The checkout function reads the current rate from PostgreSQL and rejects a mismatched submitted total.
+For example, two jet skis for two hours cost **240.00 EUR**. The checkout function reads the current rate from PostgreSQL and rejects a mismatched submitted total.
 
 ### `public.bookings`
 
@@ -235,7 +240,7 @@ Each row stores one reservation, its customer details, payment state, and operat
 | `booking_date` | `date` | Required | Local rental date |
 | `start_time` | `time` | Whole hour; within operating window | Local rental start time |
 | `duration_hours` | `integer` | Between 1 and 4 | Reserved duration |
-| `total_price_bgn` | `decimal(10,2)` | Greater than 0 | Total price for all units and hours |
+| `total_price_eur` | `decimal(10,2)` | Greater than 0 | Total price for all units and hours |
 | `payment_status` | `varchar(50)` | Default `Pending`; allowed `Pending`, `Paid`, `Refunded` | Payment state |
 | `fulfillment_status` | `varchar(50)` | Default `Reserved`; allowed `Reserved`, `Active`, `Completed`, `No-Show`, `Cancelled` | Rental operational state |
 | `quantity` | `integer` | Default 1; greater than 0 | Number of units reserved |
@@ -292,6 +297,18 @@ The mock checkout inserts `Pending` and updates to `Paid` in the same transactio
 
 The `tide_booking_changed` trigger emits event **`availability`** on public channel **`tide-availability`**. Its application payload contains only `date` and `equipment_id`; it does not broadcast customer details. Clients refetch authoritative availability when notified, and poll every 30 seconds as a fallback.
 
+## Departure map
+
+| Region | Map center (latitude, longitude) |
+| --- | --- |
+| Sunny Beach | 42.6931, 27.7088 |
+| Nessebar | 42.6587, 27.7348 |
+| Burgas Marina | 42.4925, 27.4831 |
+
+All five supplied kiosks are illustrative locations, defined in `lib/locations.ts`. The map supports dragging, touch zoom, keyboard navigation, and reduced-motion preferences. Google buttons use the [documented Maps directions URL](https://developers.google.com/maps/documentation/urls/guide); Apple buttons use `maps://?q=latitude,longitude` and require a device with a Maps protocol handler. Both links target a new tab; the browser may hand Apple links to the installed app. No visitor GPS permission is requested.
+
+Tiles load directly from `https://tile.openstreetmap.org/{z}/{x}/{y}.png`, with visible attribution and normal browser caching. Follow the [OpenStreetMap tile usage policy](https://operations.osmfoundation.org/policies/tiles/); this shared tile service has no availability guarantee. No API key is needed.
+
 ## Pages and API
 
 | Route | Purpose / access |
@@ -313,13 +330,15 @@ The `tide_booking_changed` trigger emits event **`availability`** on public chan
 
 ## Mock payment integration
 
+Checkout payloads explicitly require `currency: "EUR"`; signed events use `data.object.currency: "eur"`.
+
 The browser validates the sample card locally and sends only `payment_token: "pm_mock_visa"` with the booking request. Card numbers and security codes are not transmitted or stored.
 
 The optional webhook accepts a Stripe-shaped **test** event with:
 
 - `type: "payment_intent.succeeded"`
 - `livemode: false`
-- `data.object.currency: "bgn"`
+- `data.object.currency: "eur"`
 - `data.object.amount_received` equal to the booking total in minor units
 - `data.object.metadata.booking` containing the same validated booking object as the mock API
 
