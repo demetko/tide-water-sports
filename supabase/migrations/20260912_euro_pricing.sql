@@ -5,11 +5,11 @@ begin;
 set local lock_timeout = '10s';
 lock table public.equipment, public.bookings in access exclusive mode;
 
-create or replace function public.tide_broadcast() returns trigger language plpgsql security definer set search_path=public as $
+create or replace function public.tide_broadcast() returns trigger language plpgsql security definer set search_path=public as $$
 begin
  perform realtime.send(jsonb_build_object('date',new.booking_date,'equipment_id',new.equipment_id),'availability','tide-availability',false);
  return new;
-end; $;
+end; $$;
 
 do $migration$
 declare source_column text; column_count int; constraint_record record;

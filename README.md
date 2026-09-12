@@ -4,6 +4,16 @@ Tide is a mobile-first water sports rental MVP for visitors and rental operators
 
 **Payments are simulated.** The portal does not charge cards or connect to a production payment processor. Prices are configured in EUR according to the MVP specification.
 
+## Latest changes — 12 September 2026
+
+- Migrated catalog prices, checkout totals, vendor revenue, database fields, webhook currency, and all six interface languages to euros (€).
+- Set hourly prices to **€60 for jet skis**, **€45 for tandem parasailing**, and **€175 for the Sea Ray 230 yacht**.
+- Removed the redundant shield-and-slogan card from the search filter bar. Departure and date controls now share two balanced columns on desktop and stack on mobile.
+- Added a responsive Leaflet map below the adventure cards, with smooth departure-based camera transitions, five illustrative kiosks, and Google/Apple Maps actions.
+- Updated checkout retry fingerprints to normalize decimal amounts and repaired the Realtime broadcast trigger used during reservations.
+
+See [CHANGELOG.md](CHANGELOG.md) for implementation details, compatibility changes, and the checks completed for this update.
+
 ## Target regions
 
 | Region / departure desk | Booking support |
@@ -17,6 +27,16 @@ The three desks share the same equipment capacity pool. Selecting a different de
 ## Updating an existing installation
 
 For an existing Tide database, run [the euro pricing migration](supabase/migrations/20260912_euro_pricing.sql) in the Supabase SQL Editor before deploying this revision. It renames the monetary columns to `hourly_rate_eur` and `total_price_eur`, halves the previous simulated prices and booking totals once, and refreshes checkout retry fingerprints. Reservations and capacity are preserved. Rerunning does not halve the amounts again. Fresh databases should use `supabase/schema.sql` instead.
+
+To upgrade another existing installation:
+
+1. Pull the latest source and run `npm ci` to install the locked Leaflet dependencies.
+2. Run the complete migration in the Supabase SQL Editor. It also installs the corrected four-argument Realtime broadcast function before updating booking records.
+3. Confirm the equipment query returns `hourly_rate_eur` values of **60.00**, **45.00**, and **175.00** for the original seeded fleet.
+4. Restart or deploy the updated app, then reload any already-open storefront and vendor tabs. The previous app expects the old database column names and must not remain in use after migration.
+5. Update external test clients to send `currency: "EUR"` in booking payloads and `currency: "eur"` in mock webhook payment objects. Missing or unsupported booking currencies are rejected.
+
+The migration's one-time division by two implements the requested MVP repricing; it is not an exchange-rate calculation. On an already-migrated database it preserves the current monetary values. The connected Tide installation was migrated during the feature update; these instructions are for other installations.
 
 ## Features
 
@@ -42,6 +62,7 @@ For an existing Tide database, run [the euro pricing migration](supabase/migrati
 | Database | Supabase PostgreSQL |
 | Staff identity | Supabase Auth and a database staff allowlist |
 | Live updates | Supabase Realtime Broadcast |
+| Interactive map | Leaflet 1.9.4, OpenStreetMap standard tiles, TypeScript Leaflet definitions |
 | Worker build | Vinext, Vite, and Cloudflare Wrangler |
 
 The standard Next.js commands and the Sites-compatible Worker commands are separate. Use the Next.js path below for ordinary local development.
@@ -299,15 +320,38 @@ The `tide_booking_changed` trigger emits event **`availability`** on public chan
 
 ## Departure map
 
+The map sits directly below the adventure selection grid. Changing **Your departure point** closes any open popup and calls Leaflet `flyTo` with the selected hub and **zoom 14**. Reduced-motion preferences disable the animation. Dates, duration, and quantities continue to control booking availability; the kiosk locations are illustrative and do not represent live inventory at each pin.
+
 | Region | Map center (latitude, longitude) |
 | --- | --- |
 | Sunny Beach | 42.6931, 27.7088 |
 | Nessebar | 42.6587, 27.7348 |
 | Burgas Marina | 42.4925, 27.4831 |
 
+### Kiosk markers
+
+| Pin | Kiosk | Region | Latitude | Longitude |
+| --- | --- | --- | ---: | ---: |
+| 1 | Central Beach Jet Ski Station | Sunny Beach | 42.6912 | 27.7125 |
+| 2 | Action Water Sports Kiosk | Sunny Beach | 42.6965 | 27.7150 |
+| 3 | Old Town South Beach Charter Kiosk | Nessebar | 42.6545 | 27.7290 |
+| 4 | North Beach Parasailing Center | Nessebar | 42.6620 | 27.7210 |
+| 5 | Port Burgas Yacht Charter Terminal | Burgas Marina | 42.4910 | 27.4815 |
+
+Markers are numbered, colored by activity, and labeled for keyboard and screen-reader access. Each popup shows the kiosk name, region, and two side-by-side navigation actions:
+
+| Action | URL template |
+| --- | --- |
+| Google Maps Directions | `https://www.google.com/maps/dir/?api=1&destination={latitude},{longitude}` |
+| Apple Maps Directions | `maps://?q={latitude},{longitude}` |
+
+The Google URL uses the functional Maps directions route instead of concatenating coordinates directly onto the domain. Links use `target="_blank"` and `rel="noopener noreferrer"`.
+
 All five supplied kiosks are illustrative locations, defined in `lib/locations.ts`. The map supports dragging, touch zoom, keyboard navigation, and reduced-motion preferences. Google buttons use the [documented Maps directions URL](https://developers.google.com/maps/documentation/urls/guide); Apple buttons use `maps://?q=latitude,longitude` and require a device with a Maps protocol handler. Both links target a new tab; the browser may hand Apple links to the installed app. No visitor GPS permission is requested.
 
 Tiles load directly from `https://tile.openstreetmap.org/{z}/{x}/{y}.png`, with visible attribution and normal browser caching. Follow the [OpenStreetMap tile usage policy](https://operations.osmfoundation.org/policies/tiles/); this shared tile service has no availability guarantee. No API key is needed.
+
+The map resizes with its container and supports touch panning, pinch zoom, and zoom buttons. Mouse-wheel zoom is disabled to keep page scrolling usable. Loading and retry messages are localized; a tile-loading failure leaves the kiosk markers and directions available. Zoom controls are hidden while a popup is open so they do not obscure its heading on small screens.
 
 ## Pages and API
 
@@ -355,6 +399,7 @@ app/
   api/                     Server API routes
   compliance/              Terms and privacy pages
 components/
+  departure-map.tsx        Leaflet lifecycle, viewport tracking, kiosk popups
   site-shell.tsx           Shared navigation and layout
   legal.tsx                Localized legal content
   ui/                      Reusable UI components
@@ -362,8 +407,13 @@ lib/
   server.ts                Supabase requests, auth, checkout validation
   client.ts                Client helpers
   i18n.tsx                 Localization
+  locations.ts             Regional hubs, kiosk coordinates, navigation URLs
+  money.ts                 Shared euro formatting and rental calculation
 supabase/
   schema.sql               Authoritative rental database setup
+  migrations/
+    20260912_euro_pricing.sql  Existing-installation currency migration
+CHANGELOG.md               Dated feature and compatibility changes
 scripts/                   Next/Vinext/Worker runtime utilities
 .env.example               Environment variable template
 next.config.ts             Next.js configuration
@@ -385,6 +435,9 @@ For a manual smoke test using nonproduction data:
 5. Sign in as an allowlisted staff user and verify the booking appears.
 6. For a reservation eligible to start now, move it to Active and then Completed.
 7. Switch languages and inspect the booking, terms, and privacy pages.
+8. Confirm all six languages show the euro symbol and that two jet skis for two hours total **€240**.
+9. Change between Sunny Beach, Nessebar, and Burgas Marina; confirm the map moves to each hub and returns to zoom 14.
+10. Open the kiosk popups and check the destination coordinates and both navigation links. Check a narrow mobile viewport for readable buttons and no horizontal page overflow.
 
 | Symptom | Check |
 | --- | --- |
